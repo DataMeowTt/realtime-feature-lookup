@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>rtfl</groupId>
+    <artifactId>rtfl-parent</artifactId>
+    <version>1.0.0</version>
+  </parent>
+  <artifactId>scenario-tests</artifactId>
+  <description>Kiểm tra tính đúng E-S1..E-S6 trên hệ thống đang chạy (không phải unit test).</description>
+
+  <dependencies>
+    <dependency>
+      <groupId>rtfl</groupId>
+      <artifactId>generator</artifactId>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-shade-plugin</artifactId>
+      </plugin>
+    </plugins>
+  </build>
+</project>
