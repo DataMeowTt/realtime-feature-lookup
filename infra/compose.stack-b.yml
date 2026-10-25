@@ -14,7 +14,11 @@ services:
         zookeeper.address: zookeeper:2181
         bind.listeners: FLUSS://coordinator-server:9123
         remote.data.dir: /tmp/fluss/remote-data
+    volumes:
+      - fluss-remote:/tmp/fluss/remote-data
 
+  # 3 tablet-server: bucket của mỗi bảng được chia ra nhiều máy (replication factor mặc định = 1),
+  # nên bucket nóng (hot key) chỉ dồn tải lên 1 trong 3 máy.
   tablet-server:
     image: apache/fluss:1.0.0
     command: tabletServer
@@ -30,3 +34,45 @@ services:
         remote.data.dir: /tmp/fluss/remote-data
         kv.snapshot.interval: 0s
         kv.rocksdb.block.cache-size: 2gb
+    volumes:
+      - fluss-remote:/tmp/fluss/remote-data
+
+  tablet-server-1:
+    image: apache/fluss:1.0.0
+    command: tabletServer
+    depends_on:
+      - coordinator-server
+    environment:
+      - |
+        FLUSS_PROPERTIES=
+        zookeeper.address: zookeeper:2181
+        bind.listeners: FLUSS://tablet-server-1:9123
+        tablet-server.id: 1
+        data.dir: /tmp/fluss/data
+        remote.data.dir: /tmp/fluss/remote-data
+        kv.snapshot.interval: 0s
+        kv.rocksdb.block.cache-size: 2gb
+    volumes:
+      - fluss-remote:/tmp/fluss/remote-data
+
+  tablet-server-2:
+    image: apache/fluss:1.0.0
+    command: tabletServer
+    depends_on:
+      - coordinator-server
+    environment:
+      - |
+        FLUSS_PROPERTIES=
+        zookeeper.address: zookeeper:2181
+        bind.listeners: FLUSS://tablet-server-2:9123
+        tablet-server.id: 2
+        data.dir: /tmp/fluss/data
+        remote.data.dir: /tmp/fluss/remote-data
+        kv.snapshot.interval: 0s
+        kv.rocksdb.block.cache-size: 2gb
+    volumes:
+      - fluss-remote:/tmp/fluss/remote-data
+
+# Thư mục remote dùng chung cho coordinator và các tablet-server
+volumes:
+  fluss-remote:
