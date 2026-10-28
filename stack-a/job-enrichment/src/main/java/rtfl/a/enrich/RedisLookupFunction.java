@@ -1,8 +1,8 @@
 package rtfl.a.enrich;
 
-import io.lettuce.core.RedisClient;
-import io.lettuce.core.api.StatefulRedisConnection;
-import io.lettuce.core.api.async.RedisAsyncCommands;
+import io.lettuce.core.cluster.RedisClusterClient;
+import io.lettuce.core.cluster.api.StatefulRedisClusterConnection;
+import io.lettuce.core.cluster.api.async.RedisAdvancedClusterAsyncCommands;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.metrics.Counter;
 import org.apache.flink.metrics.Histogram;
@@ -20,9 +20,9 @@ public class RedisLookupFunction extends RichAsyncFunction<TxEvent, String> {
 
     private final String redisUri;
 
-    private transient RedisClient client;
-    private transient StatefulRedisConnection<String, String> conn;
-    private transient RedisAsyncCommands<String, String> async;
+    private transient RedisClusterClient client;
+    private transient StatefulRedisClusterConnection<String, String> conn;
+    private transient RedisAdvancedClusterAsyncCommands<String, String> async;
     private transient Counter timeouts;
     private transient Counter errors;
     private transient Histogram lookupLatencyUs;
@@ -33,7 +33,7 @@ public class RedisLookupFunction extends RichAsyncFunction<TxEvent, String> {
 
     @Override
     public void open(Configuration parameters) {
-        client          = RedisClient.create(redisUri);
+        client          = RedisClusterClient.create(redisUri);
         conn            = client.connect();
         async           = conn.async();
         var group       = getRuntimeContext().getMetricGroup().addGroup("redis_lookup");

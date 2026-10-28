@@ -8,8 +8,8 @@
 | Fluss | 1.0.0 (`apache/fluss:1.0.0`, `fluss-flink-1.20:1.0.0`, `fluss-client:1.0.0`) | |
 | Flink CDC | `flink-sql-connector-oracle-cdc:3.6.0-1.20` | nhúng Debezium 1.9 |
 | Debezium (Stack A) | `quay.io/debezium/connect:3.7.0.Final` | đã có sẵn ojdbc11 |
-| Kafka | `apache/kafka:4.1.0` (KRaft, 1 broker) | connector Flink `3.4.0-1.20` |
-| Redis | 7.4, client Lettuce 6.4.2 | |
+| Kafka | `apache/kafka:4.1.0` (KRaft, 3 broker) | connector Flink `3.4.0-1.20` |
+| Redis | 7.4, Redis Cluster 3 master, client Lettuce 6.4.2 (`RedisClusterClient`) | |
 | Oracle | XE 21c (`gvenzl/oracle-xe:21-slim`, chạy amd64 giả lập trên Apple Silicon) | |
 
 ## Oracle XE 21c thay vì 23ai/26ai
@@ -47,14 +47,20 @@ và ở consumer/tests. Kafka phía A dùng mặc định (`fetch.min.bytes=1` t
 consumer Kafka đặt `fetch.max.wait.ms=5`. Đây là phát hiện nên đưa vào báo cáo: cấu hình mặc định
 của Fluss thiên về throughput, phải tinh chỉnh khi cần độ trễ thấp.
 
-## Partition nóng thay cho Zipf (X3)
-Zipf s=1.2 dồn ~20% tx vào một user (vài nghìn tx/s cho một người) — không thực tế.
-Thay bằng "partition nóng": dồn `hot-share` (mặc định 80%) tx vào các user thuộc một partition,
-chọn đều trong nhóm (~25k user với 4 partition), nên mỗi user vẫn giao dịch bình thường.
-Partition tính bằng đúng hàm băm của hệ thống: murmur2 của Kafka (A: topic tx_events)
-và KeyEncoder + BucketingFunction của Fluss (B: bucket user_profile; đã đối chiếu 8000/8000
-bản ghi khớp bucket thật). Chế độ đổi khi đang chạy qua `bench/control/generator.conf`
-(`make hot` / `make normal`), generator đọc lại mỗi giây.
+## Hot users (X3)
+Dồn `hot-share` (mặc định 80%) tx vào `hot-users` (mặc định 20) user cố định, chọn bằng seed cố định
+nên giống nhau ở cả 2 stack. Mỗi hot user tự rơi vào đúng 1 partition/bucket và 1 node lưu trữ ở cả
+hai stack, không phụ thuộc hàm băm nào. Bản trước dồn vào mọi user của 1 partition/bucket; cách đó
+không công bằng khi feature store có nhiều node (Kafka băm murmur2, Redis Cluster chia slot CRC16).
+Luồng tx ở cả 2 stack đều chia theo `user_id` (Kafka key, Fluss `bucket.key`), như khi dùng keyed state/CEP.
+Lưu trữ cân bằng: Kafka 3 broker + Redis Cluster 3 master (A) vs Fluss 3 tablet-server (B), replication 1.
+Chế độ đổi khi đang chạy qua `bench/control/generator.conf` (`make hot` / `make normal`).
+
+## Giới hạn RAM
+Mỗi stack, tính cả 2 container tools (generator + consumer), dùng tối đa 9.5 GiB (`mem_limit`):
+A ≈ 9.41 GiB, B ≈ 9.15 GiB. Oracle cần ~3 GiB thật (SGA ~1.45 GiB + tiến trình ~1.5 GiB) nên đặt 3328m.
+Heap JVM được đặt tường minh (Kafka 256m, Connect 320m, Fluss 192–256m, ZK 128m) vì mặc định của
+ZooKeeper (1 GB) và Debezium Connect (2 GB) vượt giới hạn container.
 
 ## Kafka producer linger
 Generator `linger.ms=1`; sink của Job A2 `linger.ms=0`.

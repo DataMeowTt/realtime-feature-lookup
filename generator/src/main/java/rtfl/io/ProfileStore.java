@@ -1,7 +1,7 @@
 package rtfl.io;
 
-import io.lettuce.core.RedisClient;
-import io.lettuce.core.api.StatefulRedisConnection;
+import io.lettuce.core.cluster.RedisClusterClient;
+import io.lettuce.core.cluster.api.StatefulRedisClusterConnection;
 import org.apache.fluss.client.Connection;
 import org.apache.fluss.client.lookup.Lookuper;
 import org.apache.fluss.client.table.Table;
@@ -23,11 +23,11 @@ public interface ProfileStore extends AutoCloseable {
     }
 
     final class RedisStore implements ProfileStore {
-        private final RedisClient client;
-        private final StatefulRedisConnection<String, String> conn;
+        private final RedisClusterClient client;
+        private final StatefulRedisClusterConnection<String, String> conn;
 
         RedisStore(String uri) {
-            client = RedisClient.create(uri);
+            client = RedisClusterClient.create(uri);
             conn = client.connect();
         }
 

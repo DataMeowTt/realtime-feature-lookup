@@ -81,10 +81,13 @@ thu nhập, hạn mức thẻ, điểm rủi ro, nhóm nợ CIC. Dự án tập 
 | | Stack A | Stack B |
 |---|---|---|
 | CDC | Debezium trên Kafka Connect | Flink CDC |
-| Feature store | Redis | Fluss PK table |
-| Luồng giao dịch | Kafka | Fluss log table |
+| Feature store | Redis Cluster (3 master) | Fluss PK table (3 tablet-server) |
+| Luồng giao dịch | Kafka (3 broker), key `user_id` | Fluss log table, `bucket.key = user_id` |
 | Logic enrich | Java, Async I/O tự viết | Flink SQL lookup join |
 | Số job Flink | 2 | 2 (đều là SQL) |
+| RAM tối đa (cả tools) | 9.41 GiB | 9.15 GiB |
+
+Hot key: 80% giao dịch dồn vào 20 user cố định (giống nhau ở cả hai stack), bật ở thời điểm ngẫu nhiên trong lúc đo.
 
 ---
 
@@ -99,10 +102,10 @@ Kết quả nằm trong `bench/results/`.
 # A1. Build lại toàn bộ jar
 make build
 
-# A2. Bật Stack A (Oracle, Kafka, Kafka Connect, Redis, Flink), không build image
+# A2. Bật Stack A (Oracle, Kafka 3 broker, Kafka Connect, Redis 3 node, Flink), không build image
 docker compose --project-directory infra -f infra/compose.common.yml -f infra/compose.kafka.yml -f infra/compose.stack-a.yml up -d --wait
 
-# A3. Deploy: đăng ký Debezium, Job A1 nạp 100k profile vào Redis qua CDC, submit Job A2
+# A3. Deploy: ghép Redis Cluster, đăng ký Debezium, Job A1 nạp 100k profile vào Redis qua CDC, submit Job A2
 make deploy-a
 
 # A4. Kiểm tra tính đúng (phải ra "ALL PASSED")
@@ -121,7 +124,7 @@ make probe STACK=a
 # B1. Tắt Stack A (giữ dữ liệu Oracle)
 make down
 
-# B2. Bật Stack B (Oracle, ZooKeeper, Fluss, Flink), không build image
+# B2. Bật Stack B (Oracle, ZooKeeper, Fluss 3 tablet-server, Flink), không build image
 docker compose --project-directory infra -f infra/compose.common.yml -f infra/compose.stack-b.yml up -d --wait
 
 # B3. Đợi Fluss sẵn sàng rồi deploy: tạo bảng Fluss, CDC snapshot 100k profile, submit job enrichment

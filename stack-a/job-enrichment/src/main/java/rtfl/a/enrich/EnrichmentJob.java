@@ -23,7 +23,7 @@ public class EnrichmentJob {
     public static void main(String[] args) throws Exception {
         ParameterTool p  = ParameterTool.fromArgs(args);
         String bootstrap = p.get("kafka", "kafka:9092");
-        String redis     = p.get("redis", "redis://redis:6379");
+        String redis     = p.get("redis", "redis://redis-1:6379");
         long timeoutMs   = p.getLong("timeout-ms", 500);
         int capacity     = p.getInt("capacity", 500);
         boolean ordered  = p.getBoolean("ordered", false);

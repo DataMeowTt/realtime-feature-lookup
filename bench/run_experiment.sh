@@ -11,16 +11,17 @@ WARMUP=${WARMUP:-30}
 DURATION=${DURATION:-300}
 UPDATE_RATE=${UPDATE_RATE:-10}
 NUM_USERS=${NUM_USERS:-100000}
-# HOT=1: mỗi lần chạy bật hot key ở 1 thời điểm ngẫu nhiên trong cửa sổ đo, giữ 1 khoảng ngẫu nhiên rồi tắt
+# HOT=1: mỗi lần chạy bật hot key ở 1 thời điểm ngẫu nhiên trong cửa sổ đo, giữ 1 khoảng ngẫu nhiên rồi tắt.
+# Hot key = SHARE giao dịch dồn vào HOT_USERS user cố định (cùng nhóm user ở cả 2 stack).
 HOT=${HOT:-0}
 SHARE=${SHARE:-0.8}
-HOT_PARTITION=${HOT_PARTITION:-0}
+HOT_USERS=${HOT_USERS:-20}
 OUT=bench/results
 mkdir -p "$OUT"
 
 case "$STACK" in
-  a)  TX=kafka; SRC=kafka; HOT_BY=kafka ;;
-  b)  TX=fluss; SRC=fluss; HOT_BY=fluss ;;
+  a)  TX=kafka; SRC=kafka ;;
+  b)  TX=fluss; SRC=fluss ;;
   *)  echo "unknown STACK $STACK"; exit 1 ;;
 esac
 CONTROL=bench/control/generator.conf
@@ -59,9 +60,9 @@ for RATE in $RATES; do
       HOT_LEN=$((DURATION / 4 + RANDOM % (DURATION / 4 + 1)))
       HOT_FILE="$OUT/${RUN_ID}_hot.csv"
       echo "event,ts_ms" > "$HOT_FILE"
-      echo "    hot key: bật sau ${HOT_START}s, giữ ${HOT_LEN}s (hot-by=$HOT_BY partition=$HOT_PARTITION share=$SHARE)"
+      echo "    hot key: bật sau ${HOT_START}s, giữ ${HOT_LEN}s ($HOT_USERS hot users, share=$SHARE)"
       ( sleep "$HOT_START"
-        printf "mode=hot\nhot-by=%s\nhot-share=%s\nhot-partition=%s\n" "$HOT_BY" "$SHARE" "$HOT_PARTITION" > "$CONTROL"
+        printf "mode=hot\nhot-users=%s\nhot-share=%s\n" "$HOT_USERS" "$SHARE" > "$CONTROL"
         echo "on,$(now_ms)" >> "$HOT_FILE"
         sleep "$HOT_LEN"
         echo "mode=uniform" > "$CONTROL"

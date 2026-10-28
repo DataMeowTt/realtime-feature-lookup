@@ -1,11 +1,11 @@
 package rtfl.a.sync;
 
 import io.lettuce.core.LettuceFutures;
-import io.lettuce.core.RedisClient;
 import io.lettuce.core.RedisFuture;
 import io.lettuce.core.ScriptOutputType;
-import io.lettuce.core.api.StatefulRedisConnection;
-import io.lettuce.core.api.async.RedisAsyncCommands;
+import io.lettuce.core.cluster.RedisClusterClient;
+import io.lettuce.core.cluster.api.StatefulRedisClusterConnection;
+import io.lettuce.core.cluster.api.async.RedisAdvancedClusterAsyncCommands;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
 import org.apache.flink.runtime.state.FunctionSnapshotContext;
 import org.apache.flink.configuration.Configuration;
@@ -39,9 +39,9 @@ public class RedisProfileSink extends RichSinkFunction<ProfileChange> implements
     private final int batchSize;
     private final long flushIntervalMs;
 
-    private transient RedisClient client;
-    private transient StatefulRedisConnection<String, String> conn;
-    private transient RedisAsyncCommands<String, String> async;
+    private transient RedisClusterClient client;
+    private transient StatefulRedisClusterConnection<String, String> conn;
+    private transient RedisAdvancedClusterAsyncCommands<String, String> async;
     private transient String upsertSha;
     private transient String deleteSha;
     private transient List<ProfileChange> buffer;
@@ -56,9 +56,10 @@ public class RedisProfileSink extends RichSinkFunction<ProfileChange> implements
 
     @Override
     public void open(Configuration parameters) {
-        client     = RedisClient.create(redisUri);
+        client     = RedisClusterClient.create(redisUri);
         conn       = client.connect();
         async      = conn.async();
+        // Cluster API gửi SCRIPT LOAD tới mọi master -> EVALSHA chạy được trên node giữ key
         upsertSha  = conn.sync().scriptLoad(UPSERT_LUA);
         deleteSha  = conn.sync().scriptLoad(DELETE_LUA);
         buffer     = new ArrayList<>(batchSize);

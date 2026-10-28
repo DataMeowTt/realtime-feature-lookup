@@ -37,7 +37,7 @@ public final class Args {
         return new Endpoints(
                 get("kafka", "kafka:9092"),
                 get("fluss", "coordinator-server:9123"),
-                get("redis", "redis://redis:6379"),
+                get("redis", "redis://redis-1:6379"),
                 get("oracle-url", "jdbc:oracle:thin:@//oracle:1521/XEPDB1"),
                 get("oracle-user", "bank"),
                 get("oracle-password", "bank"),

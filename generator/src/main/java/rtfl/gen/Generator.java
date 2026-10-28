@@ -68,7 +68,7 @@ public class Generator {
             }
 
             Random r             = new Random(seed);
-            GeneratorControl ctl = new GeneratorControl(control, ep, users, r);
+            GeneratorControl ctl = new GeneratorControl(control, users, r);
             String runId         = Long.toString(System.currentTimeMillis(), 36);
             long start           = System.nanoTime();
             long end             = start + durationS * 1_000_000_000L;

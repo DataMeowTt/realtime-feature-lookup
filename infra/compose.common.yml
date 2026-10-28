@@ -1,9 +1,12 @@
 name: rtfl
 
 services:
+  # Giới hạn RAM: mỗi stack (tính cả tools) <= 9.5 GiB. Xem bảng ngân sách trong README.
   oracle:
     image: gvenzl/oracle-xe:21-slim
     platform: linux/amd64
+    # SGA (~1.45 GiB shared memory) + PGA/tiến trình (~1.5 GiB) đo thực tế
+    mem_limit: 3328m
     environment:
       ORACLE_PASSWORD: oracle
       APP_USER: bank
@@ -25,6 +28,8 @@ services:
     build: ./flink
     image: rtfl/flink:1.20.5
     command: jobmanager
+    # 768m cho JobManager + chỗ cho JVM của `flink run` / sql-client chạy trong cùng container
+    mem_limit: 1280m
     ports:
       - "8081:8081"
     environment:
@@ -32,8 +37,9 @@ services:
         jobmanager.rpc.address: jobmanager
         taskmanager.numberOfTaskSlots: 8
         parallelism.default: 4
-        taskmanager.memory.process.size: 2048m
-        jobmanager.memory.process.size: 1024m
+        taskmanager.memory.process.size: 1472m
+        jobmanager.memory.process.size: 768m
+        env.java.opts.client: -Xmx192m
         execution.checkpointing.interval: 10s
         execution.checkpointing.mode: AT_LEAST_ONCE
         metrics.reporter.prom.factory.class: org.apache.flink.metrics.prometheus.PrometheusReporterFactory
@@ -42,6 +48,7 @@ services:
   taskmanager:
     image: rtfl/flink:1.20.5
     command: taskmanager
+    mem_limit: 1536m
     depends_on:
       - jobmanager
     environment:
@@ -50,6 +57,7 @@ services:
   # Metric Flink (jobmanager + taskmanager :9249) -> Prometheus -> Grafana, dùng chung cho cả 2 stack
   prometheus:
     image: prom/prometheus:latest
+    mem_limit: 128m
     ports:
       - "9090:9090"
     volumes:
@@ -57,6 +65,7 @@ services:
 
   grafana:
     image: grafana/grafana-enterprise:latest
+    mem_limit: 200m
     ports:
       - "3000:3000"
     environment:
@@ -74,9 +83,11 @@ services:
     image: eclipse-temurin:17-jre
     profiles: ["tools"]
     working_dir: /work
+    # Lúc bench có 2 container tools cùng chạy (generator + consumer)
+    mem_limit: 352m
     environment:
-      # Arrow trong Fluss client cần truy cập java.nio
-      JAVA_TOOL_OPTIONS: "--add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/sun.nio.ch=ALL-UNNAMED"
+      # Arrow trong Fluss client cần truy cập java.nio; heap tối đa 70% giới hạn container
+      JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=70 --add-opens=java.base/java.nio=ALL-UNNAMED --add-opens=java.base/sun.nio.ch=ALL-UNNAMED"
     volumes:
       - ..:/work
 

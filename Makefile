@@ -22,11 +22,9 @@ OUT_a  = kafka
 OUT_b  = fluss
 STORE_a  = redis
 STORE_b  = fluss
-# Partition nóng: A dồn vào partition Kafka tx_events, B dồn vào bucket Fluss user_profile
-HOT_BY_a  = kafka
-HOT_BY_b  = fluss
-SHARE         ?= 0.8
-HOT_PARTITION ?= 0
+# Hot key: SHARE giao dịch dồn vào HOT_USERS user cố định (giống nhau ở cả 2 stack)
+SHARE     ?= 0.8
+HOT_USERS ?= 20
 CONTROL = bench/control/generator.conf
 
 TOOLS = COMPOSE_IGNORE_ORPHANS=1 $(DC) $(COMMON) --profile tools run --rm --no-deps tools java -cp
@@ -76,8 +74,8 @@ test-freshness:
 # Đổi cách chọn user của generator ĐANG CHẠY (áp dụng sau ~1s, không cần khởi động lại)
 hot:
 	@mkdir -p bench/control
-	@printf "mode=hot\nhot-by=%s\nhot-share=%s\nhot-partition=%s\n" $(HOT_BY_$(STACK)) $(SHARE) $(HOT_PARTITION) > $(CONTROL)
-	@echo "generator -> hot partition $(HOT_PARTITION) ($(HOT_BY_$(STACK))), share=$(SHARE)"
+	@printf "mode=hot\nhot-users=%s\nhot-share=%s\n" $(HOT_USERS) $(SHARE) > $(CONTROL)
+	@echo "generator -> $(HOT_USERS) hot users, share=$(SHARE)"
 
 normal:
 	@mkdir -p bench/control && echo "mode=uniform" > $(CONTROL)
@@ -98,7 +96,7 @@ kill-tm:
 # RedisInsight (Stack A): http://localhost:5540 — tắt bằng make redis-ui-down
 redis-ui:
 	$(DC) $(STACK_A) --profile ui up -d redisinsight
-	@echo "RedisInsight: http://localhost:5540 (database rtfl-redis = redis:6379)"
+	@echo "RedisInsight: http://localhost:5540 (database rtfl-redis = redis-1:6379, Redis Cluster 3 node)"
 
 redis-ui-down:
 	$(DC) $(STACK_A) --profile ui rm -sf redisinsight

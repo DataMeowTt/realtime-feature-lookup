@@ -13,7 +13,7 @@ public class ProfileSyncJob {
     public static void main(String[] args) throws Exception {
         ParameterTool p  = ParameterTool.fromArgs(args);
         String bootstrap = p.get("kafka", "kafka:9092");
-        String redis     = p.get("redis", "redis://redis:6379");
+        String redis     = p.get("redis", "redis://redis-1:6379");
         int batchSize    = p.getInt("batch-size", 500);
         long flushMs     = p.getLong("flush-ms", 5);
 

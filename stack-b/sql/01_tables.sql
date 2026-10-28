@@ -24,7 +24,8 @@ CREATE TABLE IF NOT EXISTS fluss_catalog.fraud.user_profile (
   -- không phải table property: xem infra/compose.stack-b.yml
   );
 
--- Log table: luồng giao dịch đầu vào
+-- Log table: luồng giao dịch đầu vào. Không có PK nhưng chia bucket theo user_id (như key của
+-- Kafka ở Stack A): mọi giao dịch của 1 user nằm cùng bucket, đúng thứ tự -> dùng được cho keyed state / CEP.
 CREATE TABLE IF NOT EXISTS fluss_catalog.fraud.tx_events (
   transaction_id           STRING,
   user_id                  STRING,
@@ -35,7 +36,7 @@ CREATE TABLE IF NOT EXISTS fluss_catalog.fraud.tx_events (
   `timestamp`              STRING,
   send_ts_ms               BIGINT,
   expected_profile_version BIGINT
-) WITH ('bucket.num' = '__BUCKETS__');
+) WITH ('bucket.num' = '__BUCKETS__', 'bucket.key' = 'user_id');
 
 -- Log table: output enrichment
 CREATE TABLE IF NOT EXISTS fluss_catalog.fraud.enriched_tx (

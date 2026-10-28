@@ -1,13 +1,9 @@
 package rtfl.gen;
 
-import rtfl.io.Args;
-
 import java.io.Reader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Properties;
 import java.util.Random;
 import java.util.concurrent.Executors;
@@ -16,17 +12,14 @@ import java.util.concurrent.TimeUnit;
 
 final class GeneratorControl implements AutoCloseable {
     private final Path file;
-    private final Args.Endpoints ep;
     private final int users;
     private final Random random;
-    private final Map<String, int[]> partitionCache = new HashMap<>();
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
     private volatile UserSampler sampler;
     private String lastContent = "";
 
-    GeneratorControl(Path file, Args.Endpoints ep, int users, Random random) {
+    GeneratorControl(Path file, int users, Random random) {
         this.file = file;
-        this.ep = ep;
         this.users = users;
         this.random = random;
         this.sampler = UserSampler.uniform(users, random);
@@ -52,10 +45,9 @@ final class GeneratorControl implements AutoCloseable {
             }
             UserSampler next;
             if ("hot".equals(p.getProperty("mode", "uniform").trim())) {
-                String hotBy = p.getProperty("hot-by", "kafka").trim();
+                int hotUsers = Integer.parseInt(p.getProperty("hot-users", "20").trim());
                 double share = Double.parseDouble(p.getProperty("hot-share", "0.8").trim());
-                int partition = Integer.parseInt(p.getProperty("hot-partition", "0").trim());
-                next = UserSampler.hot(partitions(hotBy), partition, share, random, hotBy);
+                next = UserSampler.hotUsers(users, hotUsers, share, random);
             } else {
                 next = UserSampler.uniform(users, random);
             }
@@ -64,19 +56,6 @@ final class GeneratorControl implements AutoCloseable {
         } catch (Exception e) {
             System.err.printf("[control] %s ignored invalid config: %s (keeping %s)%n", Instant.now(), e, sampler);
         }
-    }
-
-    private int[] partitions(String hotBy) throws Exception {
-        int[] cached = partitionCache.get(hotBy);
-        if (cached == null) {
-            switch (hotBy) {
-                case "kafka": cached = Partitioning.kafka(ep, users); break;
-                case "fluss": cached = Partitioning.fluss(ep, users); break;
-                default: throw new IllegalArgumentException("hot-by must be kafka|fluss, got " + hotBy);
-            }
-            partitionCache.put(hotBy, cached);
-        }
-        return cached;
     }
 
     @Override

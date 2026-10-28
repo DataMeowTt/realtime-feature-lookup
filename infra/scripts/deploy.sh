@@ -75,6 +75,29 @@ wait_until() { # wait_until "<mô tả>" <lệnh trả số> <ngưỡng> <timeou
   log "$desc: chỉ đạt $n/$target sau ${timeout}s"; return 1
 }
 
+REDIS_NODES="redis-1 redis-2 redis-3"
+
+# Ghép 3 node Redis thành cluster (0 replica) nếu chưa có. Dùng IP vì redis-cli --cluster create cần IP;
+# client vẫn nhận hostname nhờ cluster-announce-hostname trong compose.
+ensure_redis_cluster() {
+  if dc exec -T redis-1 redis-cli cluster info 2>/dev/null | grep -q 'cluster_state:ok'; then return; fi
+  local addrs=""
+  for n in $REDIS_NODES; do
+    addrs="$addrs $(dc exec -T redis-1 getent hosts "$n" | awk '{print $1}'):6379"
+  done
+  log "create Redis Cluster:$addrs"
+  dc exec -T redis-1 redis-cli --cluster create $addrs --cluster-replicas 0 --cluster-yes >/dev/null
+  wait_until "Redis cluster ok" "dc exec -T redis-1 redis-cli cluster info | grep -c 'cluster_state:ok'" 1 60
+}
+
+redis_dbsize() { # tổng số key trên mọi node
+  local total=0 n
+  for n in $REDIS_NODES; do
+    total=$(( total + $(dc exec -T "$n" redis-cli DBSIZE | tr -d '\r') ))
+  done
+  echo "$total"
+}
+
 render_sql() { # nối file SQL và thay placeholder
   cat "$@" | sed -e "s/__BUCKETS__/$BUCKETS/g" \
                  -e "s/__LOOKUP_ASYNC__/$LOOKUP_ASYNC/g" \
@@ -95,8 +118,9 @@ if [[ "$STACK" == a ]]; then
   curl -s -o /dev/null -X POST -H 'Content-Type: application/json' \
     --data @infra/debezium/users-connector.json localhost:8083/connectors || true
 
+  ensure_redis_cluster
   log "reset Redis + consumer group profile-sync (A1 đọc lại cdc.users từ đầu)"
-  dc exec -T redis redis-cli FLUSHALL >/dev/null
+  for n in $REDIS_NODES; do dc exec -T "$n" redis-cli FLUSHALL >/dev/null; done
   dc exec -T kafka /opt/kafka/bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 \
     --delete --group profile-sync >/dev/null 2>&1 || true
 
@@ -105,12 +129,12 @@ if [[ "$STACK" == a ]]; then
 
   log "submit A1 profile-sync"
   dc exec -T jobmanager flink run -d -p "$PARALLELISM" -c rtfl.a.sync.ProfileSyncJob /tmp/job-profile-sync.jar \
-    --kafka kafka:9092 --redis redis://redis:6379 | grep -E "JobID|Exception" || true
-  wait_until "Redis keys" "dc exec -T redis redis-cli DBSIZE | tr -d '\r'" "$NUM_USERS" 900
+    --kafka kafka:9092 --redis redis://redis-1:6379 | grep -E "JobID|Exception" || true
+  wait_until "Redis keys" "redis_dbsize" "$NUM_USERS" 900
 
   log "submit A2 enrichment (timeout=${ASYNC_TIMEOUT_MS}ms capacity=$ASYNC_CAPACITY ordered=$ORDERED)"
   dc exec -T jobmanager flink run -d -p "$PARALLELISM" -c rtfl.a.enrich.EnrichmentJob /tmp/job-enrichment.jar \
-    --kafka kafka:9092 --redis redis://redis:6379 \
+    --kafka kafka:9092 --redis redis://redis-1:6379 \
     --timeout-ms "$ASYNC_TIMEOUT_MS" --capacity "$ASYNC_CAPACITY" --ordered "$ORDERED" | grep -E "JobID|Exception" || true
 else
   cancel_jobs

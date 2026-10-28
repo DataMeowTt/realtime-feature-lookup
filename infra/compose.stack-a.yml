@@ -1,16 +1,31 @@
+# Redis Cluster 3 master (0 replica) — ngang với 3 tablet-server của Fluss.
+# Cluster được ghép lúc `make deploy-a` (infra/scripts/deploy.sh: ensure_redis_cluster).
+x-redis: &redis
+  image: redis:7.4
+  mem_limit: 96m
+  healthcheck:
+    test: ["CMD", "redis-cli", "ping"]
+    interval: 5s
+    retries: 10
 
 services:
   kafka-connect:
     image: quay.io/debezium/connect:3.7.0.Final
+    mem_limit: 640m
     ports:
       - "8083:8083"
     depends_on:
       kafka:
         condition: service_healthy
+      kafka-2:
+        condition: service_healthy
+      kafka-3:
+        condition: service_healthy
       oracle:
         condition: service_healthy
     environment:
-      BOOTSTRAP_SERVERS: kafka:9092
+      BOOTSTRAP_SERVERS: kafka:9092,kafka-2:9092,kafka-3:9092
+      HEAP_OPTS: "-Xms256m -Xmx320m"
       GROUP_ID: connect-cluster
       CONFIG_STORAGE_TOPIC: connect_configs
       OFFSET_STORAGE_TOPIC: connect_offsets
@@ -19,26 +34,37 @@ services:
       OFFSET_STORAGE_REPLICATION_FACTOR: 1
       STATUS_STORAGE_REPLICATION_FACTOR: 1
 
-  redis:
-    image: redis:7.4
+  redis-1:
+    <<: *redis
     ports:
       - "6379:6379"
-    command: ["redis-server", "--appendonly", "no", "--save", ""]
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      retries: 10
+    command: ["redis-server", "--cluster-enabled", "yes", "--cluster-node-timeout", "5000",
+              "--cluster-announce-hostname", "redis-1", "--cluster-preferred-endpoint-type", "hostname",
+              "--appendonly", "no", "--save", ""]
 
-  # make redis-ui
+  redis-2:
+    <<: *redis
+    command: ["redis-server", "--cluster-enabled", "yes", "--cluster-node-timeout", "5000",
+              "--cluster-announce-hostname", "redis-2", "--cluster-preferred-endpoint-type", "hostname",
+              "--appendonly", "no", "--save", ""]
+
+  redis-3:
+    <<: *redis
+    command: ["redis-server", "--cluster-enabled", "yes", "--cluster-node-timeout", "5000",
+              "--cluster-announce-hostname", "redis-3", "--cluster-preferred-endpoint-type", "hostname",
+              "--appendonly", "no", "--save", ""]
+
+  # make redis-ui (không tính vào ngân sách RAM của benchmark, tắt khi đo)
   redisinsight:
     image: redis/redisinsight:latest
     profiles: ["ui"]
+    mem_limit: 256m
     ports:
       - "5540:5540"
     environment:
       RI_ACCEPT_TERMS_AND_CONDITIONS: "true"
-      RI_REDIS_HOST: redis
+      RI_REDIS_HOST: redis-1
       RI_REDIS_PORT: "6379"
       RI_REDIS_ALIAS: rtfl-redis
     depends_on:
-      - redis
+      - redis-1
